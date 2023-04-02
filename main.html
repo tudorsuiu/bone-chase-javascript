@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Bone Chase</title>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.11.0/dist/phaser.js"></script>
+    <link rel="icon" type="image/x-icon" href="/assets/favicon.png">
+    <style>
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+
+<script type="text/javascript">
+    class StartScene extends Phaser.Scene {
+        spacebar = undefined;
+        constructor() {
+            super({ key: 'startScene' });
+        }
+
+        preload() {
+            // Load any assets needed for the start scene
+            this.load.image('background','assets/start_scene_background.png');
+        }
+        create() {
+            this.add.image(400,300,'background');
+            // Add text prompting the player to start the game
+            this.add.text(400,290,'Bone Chase', {
+                fontSize: '28px',
+                fill:'#fff'
+            }).setOrigin(0.5);
+
+            let startText = this.add.text(395, 313, 'Press SPACE to start', {
+                fontSize: '24px',
+                fill: '#fff',
+            }).setOrigin(0.5);
+
+            this.tweens.add({
+                targets: startText,
+                alpha: 0,
+                duration: 300,
+                yoyo: true,
+                repeat: -1
+            });
+
+            this.spacebar = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        }
+
+        update() {
+            if (Phaser.Input.Keyboard.JustDown(this.spacebar)) {
+                this.scene.stop('startScene');
+                this.scene.start('gameScene');
+            }
+        }
+    }
+
+    var player1Score = 0;
+    var player2Score = 0;
+
+    class GameScene extends Phaser.Scene {
+        cursors = undefined;
+        player1 = undefined;
+        player1ScoreText = undefined;
+        player2 = undefined;
+        player2ScoreText = undefined;
+        platforms = undefined;
+        bones = undefined;
+        keyA = undefined;
+        keyS = undefined;
+        keyD = undefined;
+        keyW = undefined;
+        constructor() {
+            super({ key: 'gameScene' });
+        }
+
+        preload() {
+            // Load any assets needed for the game scene
+            this.load.image('sky','assets/background.png');
+            this.load.image('platform','assets/platform.png');
+            this.load.image('bone','assets/bone.png');
+            this.load.spritesheet('whiteDog', 'assets/white_dog.png', { frameWidth: 55, frameHeight: 35 });
+            this.load.spritesheet('brownDog', 'assets/brown_dog.png', { frameWidth: 55, frameHeight: 35 });
+            this.load.image('base_platform','assets/base_platform.png');
+        }
+
+        create() {
+            // Input events
+            this.cursors = this.input.keyboard.createCursorKeys();
+            this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+            this.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+            this.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+            this.keyS = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+
+            // Add background
+            this.add.image(400, 300, 'sky');
+
+            // Add score text for player 1
+            this.player1ScoreText = this.add.text(16, 16, '', {
+                fontSize: '16px',
+                fill: '#fff' });
+
+            // Add score text for player 2
+            this.player2ScoreText = this.add.text(679, 16, '', {
+                fontSize: '16px',
+                fill: '#fff' });
+
+            // Add the player sprite
+            this.player2 = this.physics.add.sprite(700, 550.5, 'whiteDog');
+            // Making our sprite bigger
+            this.player2.setScale(1.25);
+            // Our sprite cannot leave the 800x600 display
+            this.player2.setCollideWorldBounds(true);
+            // Add score text for player 2
+            this.player2ScoreText = this.add.text(679, 16, 'Player 2:' + player2Score, {
+                fontSize: '16px',
+                fill: '#fff' });
+
+            // Add the player sprite
+            this.player1 = this.physics.add.sprite(100, 550.5, 'brownDog');
+            // Making our sprite bigger
+            this.player1.setScale(1.25);
+            // Our sprite cannot leave the 800x600 display
+            this.player1.setCollideWorldBounds(true);
+            // Add score text for player 1
+            this.player1ScoreText = this.add.text(16, 16, 'Player 1:' + player1Score, {
+                fontSize: '16px',
+                fill: '#fff' });
+
+            // The platforms group contains the ground and the 2 ledges we can jump on
+            this.platforms = this.physics.add.staticGroup();
+            this.platforms.create(400, 584, 'base_platform');
+
+            // First row of two platforms
+            this.platforms.create(0,500,'platform');
+            this.platforms.create(800,500,'platform');
+
+            // Second single platform
+            this.platforms.create(400,420,'platform');
+
+            // Third row of platforms
+            this.platforms.create(100,340,'platform');
+            this.platforms.create(700,340,'platform');
+
+            // Fourth row of platforms
+            this.platforms.create(50,260,'platform');
+            this.platforms.create(750,260,'platform');
+
+            // Second single platform
+            this.platforms.create(400,180,'platform');
+
+            // Our players now can walk on platforms
+            this.physics.add.collider(this.player1, this.platforms);
+            this.physics.add.collider(this.player2, this.platforms);
+
+            // Making every bone static so that it won't fall through the map
+            this.bones = this.physics.add.staticGroup();
+
+            // Adding bones
+            const bonePositions = [
+                [400,385], [100,305], [700,305], [100,465],
+                [700,465], [100,225], [700,225], [400,145]
+            ];
+            let currentBoneIndex = Phaser.Math.Between(0, bonePositions.length - 1);
+            let currentBone = this.bones.create(...bonePositions[currentBoneIndex], 'bone');
+            currentBone.setVisible(false);
+
+            this.time.addEvent({
+                delay: 4000, // 4 seconds
+                loop: true,
+                callback: () => {
+                    currentBone.setVisible(false);
+                    currentBoneIndex = Phaser.Math.Between(0, bonePositions.length - 1);
+                    currentBone = this.bones.create(...bonePositions[currentBoneIndex], 'bone');
+                    currentBone.setVisible(true);
+                }
+            });
+
+            //  Our player1 animations, turning, walking left and walking right.
+            this.anims.create({
+                key: 'brownDogLeft',
+                frames: this.anims.generateFrameNumbers('brownDog', { start: 0, end: 7 }),
+                frameRate: 10,
+                repeat: -1
+            });
+
+            this.anims.create({
+                key: 'brownDogTurn',
+                frames: [ { key: 'brownDog', frame: 8 } ],
+                frameRate: 20
+            });
+
+            this.anims.create({
+                key: 'brownDogRight',
+                frames: this.anims.generateFrameNumbers('brownDog', { start: 9, end: 16 }),
+                frameRate: 10,
+                repeat: -1
+            });
+
+            // Our player2 animations, turning, walking left and walking right.
+            this.anims.create({
+                key: 'whiteDogLeft',
+                frames: this.anims.generateFrameNumbers('whiteDog', { start: 0, end: 7 }),
+                frameRate: 10,
+                repeat: -1
+            });
+
+            this.anims.create({
+                key: 'whiteDogTurn',
+                frames: [ { key: 'whiteDog', frame: 8 } ],
+                frameRate: 20
+            });
+
+            this.anims.create({
+                key: 'whiteDogRight',
+                frames: this.anims.generateFrameNumbers('whiteDog', { start: 9, end: 16 }),
+                frameRate: 10,
+                repeat: -1
+            });
+        }
+
+        update() {
+            // Check for collisions between player 1 and bones
+            this.physics.overlap(this.player1, this.bones, (player, bone) => {
+                // Increment player 1 score
+                if(bone.visible) {
+                    player1Score += 10;
+                    this.player1ScoreText.setText('Player 1: ' + player1Score);
+
+                    // Remove bone
+                    bone.disableBody(true, true);
+                }
+            });
+
+            // Check for collisions between player 2 and bones
+            this.physics.overlap(this.player2, this.bones, (player, bone) => {
+                // Increment player 2 score
+                if(bone.visible) {
+                    player2Score += 10;
+                    this.player2ScoreText.setText('Player 2: ' + player2Score);
+
+                    // Remove bone
+                    bone.disableBody(true, true);
+                }
+            });
+
+            if (player1Score === 80 || player2Score === 80) {
+                this.cursors.up.isDown = false;
+                this.cursors.left.isDown = false;
+                this.cursors.down.isDown = false;
+                this.cursors.right.isDown = false;
+                this.keyW.isDown = false;
+                this.keyA.isDown = false;
+                this.keyS.isDown = false;
+                this.keyD.isDown = false;
+                this.scene.stop('gameScene');
+                this.scene.start('gameOverScene');
+            }
+
+            if (this.cursors.left.isDown)
+            {
+                this.player2.setVelocityX(-180);
+                this.player2.anims.play('whiteDogLeft', true);
+            }
+            else if (this.cursors.right.isDown)
+            {
+                this.player2.setVelocityX(180);
+                this.player2.anims.play('whiteDogRight', true);
+            }
+            else
+            {
+                this.player2.setVelocityX(0);
+                this.player2.anims.play('whiteDogTurn');
+            }
+            if (this.cursors.up.isDown && this.player2.body.touching.down)
+            {
+                this.player2.setVelocityY(-230);
+            }
+            if(this.cursors.down.isDown && !this.player2.body.touching.down) {
+                this.player2.setVelocityY(180);
+            }
+
+            if (this.keyA.isDown)
+            {
+                this.player1.setVelocityX(-180);
+                this.player1.anims.play('brownDogLeft', true);
+            }
+            else if (this.keyD.isDown)
+            {
+                this.player1.setVelocityX(180);
+                this.player1.anims.play('brownDogRight', true);
+            }
+            else
+            {
+                this.player1.setVelocityX(0);
+                this.player1.anims.play('brownDogTurn');
+            }
+
+            if (this.keyW.isDown && this.player1.body.touching.down)
+            {
+                this.player1.setVelocityY(-230);
+            }
+            if(this.keyS.isDown && !this.player1.body.touching.down) {
+                this.player1.setVelocityY(180);
+            }
+        }
+    }
+
+    class GameOverScene extends Phaser.Scene {
+        spacebar = undefined;
+        constructor() {
+            super({ key: 'gameOverScene' });
+        }
+
+        preload() {
+            this.load.image('whiteDogWinner', 'assets/white_dog_won.png');
+            this.load.image('brownDogWinner', 'assets/brown_dog_won.png');
+        }
+
+        create() {
+            if(player1Score === 80) {
+                this.add.image(400,300,'brownDogWinner');
+
+                // Add text indicating the game is over
+                this.add.text(460, 285, 'Player 1 won', {
+                    fontSize: '32px',
+                    fill: '#fff',
+                });
+
+                // Press spacebar for restarting the game text
+                let restartText = this.add.text(395, 315, 'Press SPACE to play again', {
+                    fontSize: '24px',
+                    fill: '#fff',
+                });
+
+                this.tweens.add({
+                    targets: restartText,
+                    alpha: 0,
+                    duration: 300,
+                    yoyo: true,
+                    repeat: -1
+                });
+
+            }
+            else if(player2Score === 80) {
+                this.add.image(400,300,'whiteDogWinner');
+
+                // Add text indicating the game is over
+                this.add.text(115, 285, 'Player 2 won', {
+                    fontSize: '32px',
+                    fill: '#fff',
+                });
+
+                // Press spacebar for restarting the game text
+                let restartText = this.add.text(50, 315, 'Press SPACE to play again', {
+                    fontSize: '24px',
+                    fill: '#fff',
+                });
+
+                this.tweens.add({
+                    targets: restartText,
+                    alpha: 0,
+                    duration: 300,
+                    yoyo: true,
+                    repeat: -1
+                });
+            }
+
+            player1Score = 0;
+            player2Score = 0;
+
+            this.spacebar = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        }
+
+        update() {
+            if (Phaser.Input.Keyboard.JustDown(this.spacebar)) {
+                this.scene.stop('gameOverScene');
+                this.scene.start('gameScene');
+            }
+        }
+    }
+
+    const config = {
+        type: Phaser.AUTO,
+        width: 800,
+        height: 600,
+        physics: {
+            default: 'arcade',
+            arcade: {
+                gravity: { y: 300 },
+                debug: false
+            }
+        },
+        input: {
+            keyboard: true
+        },
+        scene: [
+            StartScene,
+            GameScene,
+            GameOverScene
+        ]
+    };
+
+    const game = new Phaser.Game(config);
+</script>
+
+</body>
+</html>
